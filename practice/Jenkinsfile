@@ -44,7 +44,7 @@ pipeline {
                 sh '''
                     echo "[+] JUnit 테스트 실행..."
                     # 다시 루트로 돌아왔으므로 최상단의 lib와 classes를 사용함
-                    java -jar ${JUNIT_JAR_PATH} \
+                    java -Dfile.encoding=UTF-8 -jar ${JUNIT_JAR_PATH} \
                          --class-path ${CLASS_DIR} \
                          --scan-class-path \
                          --details=tree \
