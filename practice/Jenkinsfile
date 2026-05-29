@@ -15,43 +15,35 @@ pipeline {
             }
         }
 
-        stage('Prepare') {
+        stage('Pipeline Exec') {
             steps {
-                sh '''
-                    mkdir -p ${CLASS_DIR}
-                    mkdir -p ${REPORT_DIR}
-                    mkdir -p lib
-                    echo "[+] Downloading JUnit JAR..."
-                    curl -L -o ${JUNIT_JAR_PATH} ${JUNIT_JAR_URL}
-                '''
-            }
-        }
+                dir('practice') {
+                    sh '''
+                        echo "[+] Preparing directories..."
+                        mkdir -p ${CLASS_DIR}
+                        mkdir -p ${REPORT_DIR}
+                        mkdir -p lib
 
-        stage('Build') {
-            steps {
-                sh '''
-                    echo "[+] Compiling source files..."
-                    cd practice
-                    find src -name "*.java" > sources.txt
-                    javac -encoding UTF-8 -d ../${CLASS_DIR} -cp ../${JUNIT_JAR_PATH} @sources.txt
-                '''
-            }
-        }
+                        echo "[+] Downloading JUnit JAR..."
+                        curl -L -o ${JUNIT_JAR_PATH} ${JUNIT_JAR_URL}
 
-        stage('Test') {
-            steps {
-                sh '''
-                    echo "[+] Running tests with JUnit..."
-                    java -jar ${JUNIT_JAR_PATH} \
-                         --class-path ${CLASS_DIR} \
-                         --scan-class-path \
-                         --details=tree \
-                         --details-theme=ascii \
-                         --reports-dir ${REPORT_DIR} \
-                         --config=junit.platform.output.capture.stdout=true \
-                         --config=junit.platform.reporting.open.xml.enabled=true \
-                         > ${REPORT_DIR}/test-output.txt
-                '''
+                        echo "[+] Compiling source files..."
+                        find src -name "*.java" > sources.txt
+                        javac -encoding UTF-8 -d ./${CLASS_DIR} -cp ./${JUNIT_JAR_PATH} @sources.txt
+
+                        echo "[+] Running tests with JUnit..."
+                        # 💡 여기에 나온 > 명령어 덕분에 test-output.txt 파일이 자동으로 생성되고 기록됩니다!
+                        java -jar ./${JUNIT_JAR_PATH} \
+                             --class-path ./${CLASS_DIR} \
+                             --scan-class-path \
+                             --details=tree \
+                             --details-theme=ascii \
+                             --reports-dir ./${REPORT_DIR} \
+                             --config=junit.platform.output.capture.stdout=true \
+                             --config=junit.platform.reporting.open.xml.enabled=true \
+                             > ${REPORT_DIR}/test-output.txt
+                    '''
+                }
             }
         }
     }
@@ -59,16 +51,43 @@ pipeline {
     post {
         always {
             echo "[*] Archiving test results..."
-            junit "${REPORT_DIR}/**/*.xml"
-            archiveArtifacts artifacts: "${REPORT_DIR}/**/*", allowEmptyArchive: true
-        }
-
-        failure {
-            echo "Build or test failed!"
+            junit "practice/${REPORT_DIR}/**/*.xml"
+            
+            // ⭐ 1. 빌드/테스트 결과를 젠킨스 Workspace 및 빌드 기록에 아카이브(저장)합니다.
+            // 이렇게 하면 젠킨스 빌드 화면 우측에서 test-output.txt 파일을 바로 다운받아 볼 수 있습니다.
+            archiveArtifacts artifacts: "practice/${REPORT_DIR}/test-output.txt", allowEmptyArchive: true
         }
 
         success {
             echo "Build and test succeeded!"
+            
+            // ⭐ 2. 빌드 성공 시 이메일 발송
+            mail to: 'sjh000817@naver.com', // 👈 본인의 이메일 주소로 변경하세요!
+                 subject: "🟢 Jenkins 빌드 성공: ${currentBuild.fullDisplayName}",
+                 body: """안녕하세요,
+                 
+                 젠킨스 자동 빌드 및 테스트가 성공적으로 완료되었습니다!
+                 
+                 - 프로젝트: ${env.JOB_NAME}
+                 
+                 상세 결과 파일(test-output.txt)은 젠킨스 대시보드 내 아티팩트(Artifacts)에서 확인하실 수 있습니다.
+                 
+                 감사합니다."""
+        }
+
+        failure {
+            echo "Build or test failed!"
+            
+            // ⭐ 3. 빌드 실패 시 이메일 발송
+            mail to: 'sjh000817@naver.com', // 👈 본인의 이메일 주소로 변경하세요!
+                 subject: "🔴 Jenkins 빌드 실패: ${currentBuild.fullDisplayName}",
+                 body: """안녕하세요,
+                 
+                 젠킨스 자동 빌드 또는 테스트 중에 오류가 발생했습니다.
+                 
+                 - 프로젝트: ${env.JOB_NAME}
+                 
+                 젠킨스 콘솔 로그(Console Output)를 확인하여 에러 원인을 파악해 주세요."""
         }
     }
 }
